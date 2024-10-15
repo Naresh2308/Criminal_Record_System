@@ -1,150 +1,180 @@
-import mysql.connector
-from tkinter import *
-from tkinter import messagebox
-from tkinter import simpledialog
+import tkinter as tk
+from tkinter import ttk, messagebox
+import sqlite3
 import matplotlib.pyplot as plt
 
-# Establishing connection to the database
-mydb = mysql.connector.connect(host='localhost', user='root', password='TIRTHESH@3234')
-mycursor = mydb.cursor()
+# Database setup
+conn = sqlite3.connect('criminaldb.db')
+cursor = conn.cursor()
 
-# Creating database and tables if not exists
-mycursor.execute("CREATE DATABASE IF NOT EXISTS CRIMINAL")
-mycursor.execute("USE CRIMINAL")
-mycursor.execute("""
-CREATE TABLE IF NOT EXISTS CRIMINAL_BASICINFO(
-    CRIMINAL_NO INTEGER(4),
-    NAME VARCHAR(20),
-    JAIL VARCHAR(20),
-    STATE VARCHAR(20),
-    YEARSOFPUNISHMENT INTEGER(4),
-    CAUGHTYEAR INTEGER(5),
-    CASE_TYPE VARCHAR(15),
-    GENDER VARCHAR(8),
-    DOB DATE,
-    DEATH_PENALTY VARCHAR(3),
-    ALIVE_OR_DEAD CHAR(5),
-    NUMBER_OF_CASES INTEGER(3)
-)""")
+# Creating the table if it doesn't exist
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS criminals (
+    criminal_number INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    year_caught INTEGER NOT NULL,
+    crime_details TEXT NOT NULL,
+    jail TEXT NOT NULL
+)
+''')
+conn.commit()
 
-mycursor.execute("""
-CREATE TABLE IF NOT EXISTS CRIMINAL_PHYSICALCLASSIFICATION(
-    CRIMINAL_NO INT(4),
-    HEIGHT INT(3),
-    EYE_COLOUR VARCHAR(10),
-    IDENTIFICATION_MARK VARCHAR(20),
-    WEIGHT INT(4),
-    HAIR_COLOUR VARCHAR(10)
-)""")
+# Functions
+def insert_record():
+    criminal_number = entry_criminal_number.get()
+    name = entry_name.get()
+    year_caught = entry_year_caught.get()
+    crime_details = entry_crime_details.get()
+    jail = entry_jail.get()
 
-# Function to add a criminal record
-def addcriminalrecord():
-    try:
-        n = int(simpledialog.askinteger("Input", "Enter the number of records to store:", minvalue=1))
-        for i in range(n):
-            criminal_no = simpledialog.askinteger("Input", "Enter the Criminal Number:")
-            criminal_name = simpledialog.askstring("Input", "Enter the Criminal's Name:")
-            location = simpledialog.askstring("Input", "Enter the Jail Location:")
-            state = simpledialog.askstring("Input", "Enter the State:")
-            yp = simpledialog.askinteger("Input", "Enter the Years of Punishment:")
-            caughtyear = simpledialog.askinteger("Input", "Enter the Year when caught:")
-            casetype = simpledialog.askstring("Input", "Enter the Case Type:")
-            gender = simpledialog.askstring("Input", "Enter Gender (Male/Female/Other):")
-            birthdate = simpledialog.askstring("Input", "Enter Birth Date (YYYY-MM-DD):")
-            deathpenalty = simpledialog.askstring("Input", "Given Death Penalty (Yes/No):")
-            aod = simpledialog.askstring("Input", "Alive or Dead:")
-            no_of_cases = simpledialog.askinteger("Input", "Enter the Number of Cases:")
+    if criminal_number and name and year_caught and crime_details and jail:
+        try:
+            cursor.execute('''
+                INSERT INTO criminals (criminal_number, name, year_caught, crime_details, jail)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (criminal_number, name, year_caught, crime_details, jail))
+            conn.commit()
+            messagebox.showinfo("Success", "Record inserted successfully!")
+            clear_entries()
+        except sqlite3.IntegrityError:
+            messagebox.showerror("Error", "Criminal Number already exists!")
+    else:
+        messagebox.showerror("Error", "All fields are required!")
 
-            height = simpledialog.askinteger("Input", "Enter the Height of the Criminal (in cm):")
-            eyecolour = simpledialog.askstring("Input", "Enter the Eye Colour:")
-            im = simpledialog.askstring("Input", "Enter the Identification Mark:")
-            weight = simpledialog.askinteger("Input", "Enter the Weight in kg:")
-            haircolour = simpledialog.askstring("Input", "Enter the Hair Colour:")
+def search_record():
+    criminal_number = entry_search_criminal_number.get()
+    name = entry_search_name.get()
 
-            # Inserting records
-            val1 = (criminal_no, criminal_name, location, state, yp, caughtyear, casetype, gender, birthdate, deathpenalty, aod, no_of_cases)
-            val2 = (criminal_no, height, eyecolour, im, weight, haircolour)
-           
-            mycursor.execute("""
-            INSERT INTO CRIMINAL_BASICINFO(CRIMINAL_NO, NAME, JAIL, STATE, YEARSOFPUNISHMENT, CAUGHTYEAR, CASE_TYPE, GENDER, DOB, DEATH_PENALTY, ALIVE_OR_DEAD, NUMBER_OF_CASES)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, val1)
-           
-            mycursor.execute("""
-            INSERT INTO CRIMINAL_PHYSICALCLASSIFICATION(CRIMINAL_NO, HEIGHT, EYE_COLOUR, IDENTIFICATION_MARK, WEIGHT, HAIR_COLOUR)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """, val2)
+    if criminal_number:
+        cursor.execute('SELECT * FROM criminals WHERE criminal_number=?', (criminal_number,))
+    elif name:
+        cursor.execute('SELECT * FROM criminals WHERE name=?', (name,))
+    else:
+        messagebox.showerror("Error", "Enter Criminal Number or Name to search!")
+        return
 
-        mydb.commit()
-        messagebox.showinfo("Success", "Criminal record(s) added successfully!")
+    result = cursor.fetchone()
 
-    except Exception as e:
-        messagebox.showerror("Error", str(e))
+    if result:
+        result_text.set(f"Criminal Found:\nNumber: {result[0]}\nName: {result[1]}\nYear Caught: {result[2]}\nCrime Details: {result[3]}\nJail: {result[4]}")
+    else:
+        result_text.set("Criminal not found.")
 
-# Function to search for a criminal record
-def searchrecord():
-    try:
-        choice = simpledialog.askinteger("Input",
-            "Search by:\n1. Criminal Number\n2. Name\n3. Jail\n4. State\n5. Height\n6. Identification Mark\n7. Hair Colour\n8. Caught Year",
-            minvalue=1, maxvalue=8)
+def delete_record():
+    criminal_number = entry_delete_criminal_number.get()
 
-        if choice == 1:
-            a = simpledialog.askinteger("Input", "Enter the Criminal Number:")
-            mycursor.execute("SELECT * FROM CRIMINAL_BASICINFO WHERE CRIMINAL_NO=%s", (a,))
-        elif choice == 2:
-            a = simpledialog.askstring("Input", "Enter the Name:")
-            mycursor.execute("SELECT * FROM CRIMINAL_BASICINFO WHERE NAME=%s", (a,))
-        elif choice == 3:
-            a = simpledialog.askstring("Input", "Enter the Jail:")
-            mycursor.execute("SELECT * FROM CRIMINAL_BASICINFO WHERE JAIL=%s", (a,))
-        elif choice == 4:
-            a = simpledialog.askstring("Input", "Enter the State:")
-            mycursor.execute("SELECT * FROM CRIMINAL_BASICINFO WHERE STATE=%s", (a,))
-        elif choice == 5:
-            a = simpledialog.askinteger("Input", "Enter the Height:")
-            mycursor.execute("""
-            SELECT * FROM CRIMINAL_BASICINFO
-            INNER JOIN CRIMINAL_PHYSICALCLASSIFICATION ON CRIMINAL_BASICINFO.CRIMINAL_NO = CRIMINAL_PHYSICALCLASSIFICATION.CRIMINAL_NO
-            WHERE CRIMINAL_PHYSICALCLASSIFICATION.HEIGHT = %s
-            """, (a,))
-        elif choice == 6:
-            a = simpledialog.askstring("Input", "Enter the Identification Mark:")
-            mycursor.execute("""
-            SELECT * FROM CRIMINAL_BASICINFO
-            INNER JOIN CRIMINAL_PHYSICALCLASSIFICATION ON CRIMINAL_BASICINFO.CRIMINAL_NO = CRIMINAL_PHYSICALCLASSIFICATION.CRIMINAL_NO
-            WHERE CRIMINAL_PHYSICALCLASSIFICATION.IDENTIFICATION_MARK = %s
-            """, (a,))
-        elif choice == 7:
-            a = simpledialog.askstring("Input", "Enter the Hair Colour:")
-            mycursor.execute("""
-            SELECT * FROM CRIMINAL_BASICINFO
-            INNER JOIN CRIMINAL_PHYSICALCLASSIFICATION ON CRIMINAL_BASICINFO.CRIMINAL_NO = CRIMINAL_PHYSICALCLASSIFICATION.CRIMINAL_NO
-            WHERE CRIMINAL_PHYSICALCLASSIFICATION.HAIR_COLOUR = %s
-            """, (a,))
-        elif choice == 8:
-            a = simpledialog.askinteger("Input", "Enter the Caught Year:")
-            mycursor.execute("SELECT * FROM CRIMINAL_BASICINFO WHERE CAUGHTYEAR=%s", (a,))
+    if criminal_number:
+        cursor.execute('DELETE FROM criminals WHERE criminal_number=?', (criminal_number,))
+        conn.commit()
 
-        results = mycursor.fetchall()
-        result_str = "\n".join([str(record) for record in results])
-        messagebox.showinfo("Search Results", result_str if results else "No records found.")
+        if cursor.rowcount > 0:
+            messagebox.showinfo("Success", "Record deleted successfully!")
+            entry_delete_criminal_number.delete(0, tk.END)
+        else:
+            messagebox.showerror("Error", "Criminal not found!")
+    else:
+        messagebox.showerror("Error", "Enter Criminal Number to delete!")
 
-    except Exception as e:
-        messagebox.showerror("Error", str(e))
+def show_pie_chart():
+    cursor.execute('SELECT jail, COUNT(*) FROM criminals GROUP BY jail')
+    data = cursor.fetchall()
 
-# Main window setup
-root = Tk()
-root.title("Criminal Record System")
+    if data:
+        jails = [row[0] for row in data]
+        counts = [row[1] for row in data]
 
-# UI buttons for each feature
-btn_add = Button(root, text="Add Record", command=addcriminalrecord)
-btn_add.pack(pady=10)
+        plt.pie(counts, labels=jails, autopct='%1.1f%%')
+        plt.title('Number of Cases per Jail')
+        plt.show()
+    else:
+        messagebox.showerror("Error", "No data available to plot.")
 
-btn_search = Button(root, text="Search Record", command=searchrecord)
-btn_search.pack(pady=10)
+# UI Setup
+root = tk.Tk()
+root.title("Criminal Database Management")
 
-btn_exit = Button(root, text="Exit", command=root.quit)
-btn_exit.pack(pady=10)
+tab_control = ttk.Notebook(root)
 
-root.geometry("300x200")
+# Insert Tab
+tab_insert = ttk.Frame(tab_control)
+tab_control.add(tab_insert, text='Insert Record')
+
+label_criminal_number = ttk.Label(tab_insert, text="Criminal Number:")
+label_criminal_number.grid(column=0, row=0, padx=10, pady=10)
+entry_criminal_number = ttk.Entry(tab_insert)
+entry_criminal_number.grid(column=1, row=0)
+
+label_name = ttk.Label(tab_insert, text="Name:")
+label_name.grid(column=0, row=1, padx=10, pady=10)
+entry_name = ttk.Entry(tab_insert)
+entry_name.grid(column=1, row=1)
+
+label_year_caught = ttk.Label(tab_insert, text="Year Caught:")
+label_year_caught.grid(column=0, row=2, padx=10, pady=10)
+entry_year_caught = ttk.Entry(tab_insert)
+entry_year_caught.grid(column=1, row=2)
+
+label_crime_details = ttk.Label(tab_insert, text="Crime Details:")
+label_crime_details.grid(column=0, row=3, padx=10, pady=10)
+entry_crime_details = ttk.Entry(tab_insert)
+entry_crime_details.grid(column=1, row=3)
+
+label_jail = ttk.Label(tab_insert, text="Jail:")
+label_jail.grid(column=0, row=4, padx=10, pady=10)
+entry_jail = ttk.Entry(tab_insert)
+entry_jail.grid(column=1, row=4)
+
+button_insert = ttk.Button(tab_insert, text="Insert", command=insert_record)
+button_insert.grid(column=1, row=5, padx=10, pady=10)
+
+# Search Tab
+tab_search = ttk.Frame(tab_control)
+tab_control.add(tab_search, text='Search Record')
+
+label_search_criminal_number = ttk.Label(tab_search, text="Criminal Number:")
+label_search_criminal_number.grid(column=0, row=0, padx=10, pady=10)
+entry_search_criminal_number = ttk.Entry(tab_search)
+entry_search_criminal_number.grid(column=1, row=0)
+
+label_search_name = ttk.Label(tab_search, text="Name:")
+label_search_name.grid(column=0, row=1, padx=10, pady=10)
+entry_search_name = ttk.Entry(tab_search)
+entry_search_name.grid(column=1, row=1)
+
+button_search = ttk.Button(tab_search, text="Search", command=search_record)
+button_search.grid(column=1, row=2, padx=10, pady=10)
+
+result_text = tk.StringVar()
+label_result = ttk.Label(tab_search, textvariable=result_text, relief=tk.SUNKEN)
+label_result.grid(column=0, row=3, columnspan=2, padx=10, pady=10)
+
+# Delete Tab
+tab_delete = ttk.Frame(tab_control)
+tab_control.add(tab_delete, text='Delete Record')
+
+label_delete_criminal_number = ttk.Label(tab_delete, text="Criminal Number:")
+label_delete_criminal_number.grid(column=0, row=0, padx=10, pady=10)
+entry_delete_criminal_number = ttk.Entry(tab_delete)
+entry_delete_criminal_number.grid(column=1, row=0)
+
+button_delete = ttk.Button(tab_delete, text="Delete", command=delete_record)
+button_delete.grid(column=1, row=1, padx=10, pady=10)
+
+# Graph Tab
+tab_graph = ttk.Frame(tab_control)
+tab_control.add(tab_graph, text='Data Analysis')
+
+button_pie_chart = ttk.Button(tab_graph, text="Show Pie Chart (Cases per Jail)", command=show_pie_chart)
+button_pie_chart.grid(column=0, row=0, padx=10, pady=10)
+
+tab_control.pack(expand=1, fill='both')
+
+# Function to clear entries after insertion
+def clear_entries():
+    entry_criminal_number.delete(0, tk.END)
+    entry_name.delete(0, tk.END)
+    entry_year_caught.delete(0, tk.END)
+    entry_crime_details.delete(0, tk.END)
+    entry_jail.delete(0, tk.END)
+
 root.mainloop()
